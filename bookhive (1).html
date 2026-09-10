@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BookHive - منصة الكتب الإلكترونية</title>
+    <title>BookHive | منصة الكتب الإلكترونية</title>
+    <meta name="description" content="منصة عربية حديثة لاكتشاف وتصفح الكتب الإلكترونية.">
     <!-- استدعاء مكتبة Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- استدعاء أيقونات FontAwesome -->
@@ -70,6 +71,32 @@
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
 
+        /* تحسينات إضافية */
+        [x-cloak] { display: none !important; }
+
+        .mobile-menu {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height .35s ease;
+        }
+        .mobile-menu.open { max-height: 400px; }
+
+        .toast-container {
+            position: fixed;
+            bottom: 1rem;
+            left: 1rem;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            gap: .75rem;
+            pointer-events: none;
+        }
+
+        .dark-mode body, body.dark-mode {
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+
         /* انتقالات النوافذ المنبثقة */
         .modal-overlay {
             transition: opacity 0.3s ease-in-out;
@@ -116,7 +143,7 @@
         }
     </style>
 </head>
-<body x-data="appData()" class="text-gray-800 antialiased overflow-x-hidden">
+<body x-data="appData()" x-init="init()" class="text-gray-800 antialiased overflow-x-hidden" x-cloak>
 
     <nav class="fixed w-full z-50 glass shadow-sm transition-all duration-300" :class="{ 'py-2': scrolled, 'py-4': !scrolled }" @scroll.window="scrolled = (window.pageYOffset > 20)">
         <div class="container mx-auto px-6 flex justify-between items-center">
@@ -127,22 +154,39 @@
                 <a href="#" @click.prevent="currentPage = 'home'" class="text-gray-600 hover:text-primary transition font-medium" :class="{'text-primary font-bold': currentPage === 'home'}">الرئيسية</a>
                 <a href="#" @click.prevent="currentPage = 'allBooks'" class="text-gray-600 hover:text-primary transition font-medium" :class="{'text-primary font-bold': currentPage === 'allBooks'}">كل الكتب</a>
                 
+                <button @click="toggleDarkMode()" class="text-gray-500 hover:text-primary transition" aria-label="الوضع الداكن">
+                    <i class="fas" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
+                </button>
                 <!-- أيقونات التفاعل في شريط التنقل -->
                 <div class="flex items-center gap-4 mr-4 border-r border-gray-300 pr-4">
-                    <button @click="showToast('تم فتح قائمة المفضلة (قريباً)')" class="text-gray-500 hover:text-red-500 transition relative">
+                    <button @click="showFavoritesPanel = true" class="text-gray-500 hover:text-red-500 transition relative">
                         <i class="fas fa-heart text-xl"></i>
                         <span x-show="favorites.length > 0" x-text="favorites.length" class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full animate-bounce-slight"></span>
                     </button>
-                    <button @click="showToast('تم فتح سلة المشتريات (قريباً)')" class="text-gray-500 hover:text-primary transition relative">
+                    <button @click="showCartPanel = true" class="text-gray-500 hover:text-primary transition relative">
                         <i class="fas fa-shopping-cart text-xl"></i>
                         <span x-show="cart.length > 0" x-text="cart.length" class="absolute -top-2 -right-2 bg-primary text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full animate-bounce-slight"></span>
                     </button>
                 </div>
             </div>
-            <!-- زر القائمة للهواتف -->
-            <button class="md:hidden text-gray-600 focus:outline-none">
-                <i class="fas fa-bars text-xl"></i>
-            </button>
+            <!-- أدوات الهاتف -->
+            <div class="md:hidden flex items-center gap-3">
+                <button @click="toggleDarkMode()" class="text-gray-600 hover:text-primary" aria-label="تغيير الوضع">
+                    <i class="fas" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
+                </button>
+                <button @click="mobileMenuOpen = !mobileMenuOpen" class="text-gray-600 focus:outline-none" aria-label="فتح القائمة">
+                    <i class="fas text-xl" :class="mobileMenuOpen ? 'fa-times' : 'fa-bars'"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="md:hidden mobile-menu bg-white/95 shadow-lg" :class="{ 'open': mobileMenuOpen }">
+            <div class="px-6 py-4 flex flex-col gap-3">
+                <button @click="goTo('home')" class="text-right py-2 font-medium">الرئيسية</button>
+                <button @click="goTo('allBooks')" class="text-right py-2 font-medium">كل الكتب</button>
+                <button @click="showFavoritesPanel = true; mobileMenuOpen = false" class="text-right py-2 font-medium">المفضلة (<span x-text="favorites.length"></span>)</button>
+                <button @click="showCartPanel = true; mobileMenuOpen = false" class="text-right py-2 font-medium">السلة (<span x-text="cart.length"></span>)</button>
+            </div>
         </div>
     </nav>
 
@@ -506,6 +550,64 @@
         </div>
     </div>
 
+    <!-- لوحة المفضلة -->
+    <div x-show="showFavoritesPanel" x-cloak class="fixed inset-0 z-[120] flex" @keydown.escape.window="showFavoritesPanel=false">
+        <div class="absolute inset-0 bg-black/40" @click="showFavoritesPanel=false"></div>
+        <aside class="relative mr-auto w-full max-w-md bg-white h-full shadow-2xl p-6 overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold">الكتب المفضلة</h2>
+                <button @click="showFavoritesPanel=false" class="text-gray-500 text-xl"><i class="fas fa-times"></i></button>
+            </div>
+            <template x-if="favoriteBooks.length === 0">
+                <p class="text-gray-500 text-center py-10">لم تقومي بإضافة أي كتاب للمفضلة بعد.</p>
+            </template>
+            <div class="space-y-4">
+                <template x-for="book in favoriteBooks" :key="book.id">
+                    <div class="flex gap-3 border rounded-xl p-3">
+                        <img :src="book.image" :alt="book.title" class="w-16 h-20 object-cover rounded-lg">
+                        <div class="flex-1">
+                            <h3 class="font-bold" x-text="book.title"></h3>
+                            <p class="text-sm text-gray-500" x-text="book.author"></p>
+                            <button @click="toggleFavorite(book)" class="mt-2 text-red-500 text-sm">إزالة من المفضلة</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </aside>
+    </div>
+
+    <!-- لوحة السلة -->
+    <div x-show="showCartPanel" x-cloak class="fixed inset-0 z-[120] flex" @keydown.escape.window="showCartPanel=false">
+        <div class="absolute inset-0 bg-black/40" @click="showCartPanel=false"></div>
+        <aside class="relative mr-auto w-full max-w-md bg-white h-full shadow-2xl p-6 overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold">سلة المشتريات</h2>
+                <button @click="showCartPanel=false" class="text-gray-500 text-xl"><i class="fas fa-times"></i></button>
+            </div>
+            <template x-if="cartBooks.length === 0">
+                <p class="text-gray-500 text-center py-10">السلة فارغة حاليًا.</p>
+            </template>
+            <div class="space-y-4">
+                <template x-for="book in cartBooks" :key="book.id">
+                    <div class="flex gap-3 border rounded-xl p-3">
+                        <img :src="book.image" :alt="book.title" class="w-16 h-20 object-cover rounded-lg">
+                        <div class="flex-1">
+                            <h3 class="font-bold" x-text="book.title"></h3>
+                            <p class="text-primary font-bold" x-text="`$${book.price}`"></p>
+                            <button @click="addToCart(book)" class="mt-2 text-red-500 text-sm">إزالة</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div x-show="cartBooks.length > 0" class="mt-6 border-t pt-5">
+                <div class="flex justify-between font-bold text-xl mb-4">
+                    <span>الإجمالي</span><span x-text="`$${cartTotal}`"></span>
+                </div>
+                <button @click="checkout()" class="w-full bg-primary text-white py-3 rounded-xl font-bold">إتمام الطلب</button>
+            </div>
+        </aside>
+    </div>
+
     <footer class="bg-dark text-white pt-16 pb-8 border-t-4 border-primary">
         <div class="container mx-auto px-6">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
@@ -577,6 +679,10 @@
             return {
                 // حالة التطبيق
                 scrolled: false,
+                mobileMenuOpen: false,
+                darkMode: false,
+                showCartPanel: false,
+                showFavoritesPanel: false,
                 currentPage: 'home', // 'home' or 'allBooks'
                 books: mockBooks,
                 
@@ -591,6 +697,55 @@
                 // السلة والمفضلة (Arrays لتخزين معرفات الكتب id)
                 cart: [],
                 favorites: [],
+
+                init() {
+                    this.cart = JSON.parse(localStorage.getItem('bookhive-cart') || '[]');
+                    this.favorites = JSON.parse(localStorage.getItem('bookhive-favorites') || '[]');
+                    this.darkMode = JSON.parse(localStorage.getItem('bookhive-dark') || 'false');
+                    this.applyDarkMode();
+                },
+
+                saveData() {
+                    localStorage.setItem('bookhive-cart', JSON.stringify(this.cart));
+                    localStorage.setItem('bookhive-favorites', JSON.stringify(this.favorites));
+                    localStorage.setItem('bookhive-dark', JSON.stringify(this.darkMode));
+                },
+
+                goTo(page) {
+                    this.currentPage = page;
+                    this.mobileMenuOpen = false;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                },
+
+                toggleDarkMode() {
+                    this.darkMode = !this.darkMode;
+                    this.applyDarkMode();
+                    this.saveData();
+                },
+
+                applyDarkMode() {
+                    document.body.classList.toggle('dark-mode', this.darkMode);
+                },
+
+                get cartBooks() {
+                    return this.books.filter(book => this.cart.includes(book.id));
+                },
+
+                get favoriteBooks() {
+                    return this.books.filter(book => this.favorites.includes(book.id));
+                },
+
+                get cartTotal() {
+                    return this.cartBooks.reduce((total, book) => total + Number(book.price), 0).toFixed(2);
+                },
+
+                checkout() {
+                    if (this.cart.length === 0) return;
+                    this.showToast('<i class="fas fa-check-circle text-green-400"></i> تم إرسال طلبك بنجاح (نسخة تجريبية)');
+                    this.cart = [];
+                    this.saveData();
+                    this.showCartPanel = false;
+                },
 
                 // دالة مُجمّعة لإرجاع الكتب المفلترة
                 get filteredBooks() {
@@ -630,10 +785,12 @@
                 addToCart(book) {
                     if (!this.isInCart(book.id)) {
                         this.cart.push(book.id);
+                        this.saveData();
                         this.showToast(`<i class="fas fa-check-circle text-green-400"></i> تم إضافة "${book.title}" إلى السلة`);
                     } else {
                         // إزالة من السلة إذا كان موجوداً
                         this.cart = this.cart.filter(id => id !== book.id);
+                        this.saveData();
                         this.showToast(`<i class="fas fa-info-circle text-yellow-400"></i> تم إزالة "${book.title}" من السلة`);
                     }
                 },
@@ -646,9 +803,11 @@
                 toggleFavorite(book) {
                     if (!this.isFavorite(book.id)) {
                         this.favorites.push(book.id);
+                        this.saveData();
                         this.showToast(`<i class="fas fa-heart text-red-400"></i> تمت إضافة "${book.title}" للمفضلة`);
                     } else {
                         this.favorites = this.favorites.filter(id => id !== book.id);
+                        this.saveData();
                         this.showToast(`<i class="far fa-heart text-gray-400"></i> تمت إزالة "${book.title}" من المفضلة`);
                     }
                 },
@@ -684,7 +843,13 @@
                     const toast = document.createElement('div');
                     toast.className = 'fixed bottom-4 left-4 bg-gray-800 text-white px-6 py-3 rounded-xl shadow-2xl z-[150] flex items-center gap-3 animate-slide-up transition-opacity duration-500 border border-gray-700';
                     toast.innerHTML = messageHTML;
-                    document.body.appendChild(toast);
+                    let container = document.querySelector('.toast-container');
+                    if (!container) {
+                        container = document.createElement('div');
+                        container.className = 'toast-container';
+                        document.body.appendChild(container);
+                    }
+                    container.appendChild(toast);
                     
                     setTimeout(() => {
                         toast.style.opacity = '0';
